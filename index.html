@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KUE-CHIP2 Web Emulator / Assembler / Disassembler</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111827; --panel2:#1f2937; --ink:#e5e7eb; --muted:#94a3b8;
+    --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --err:#fb7185; --line:#334155;
+    --pc:#0e7490; --code:#020617;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+  header{padding:14px 18px;border-bottom:1px solid var(--line);background:#020617;position:sticky;top:0;z-index:3}
+  h1{margin:0;font-size:18px;font-weight:700;letter-spacing:.02em}
+  .sub{color:var(--muted);font-size:12px;margin-top:3px}
+  main{display:grid;grid-template-columns:minmax(360px,1.05fr) minmax(480px,1.35fr);gap:12px;padding:12px;max-width:1600px;margin:0 auto}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:0}
+  section h2{font-size:14px;margin:0;padding:10px 12px;background:var(--panel2);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .body{padding:10px 12px}
+  textarea,input,select,button{font:inherit}
+  textarea{width:100%;min-height:230px;resize:vertical;background:var(--code);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:13px;tab-size:4}
+  input[type=text],input[type=number]{background:var(--code);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-width:0}
+  button{background:#1e293b;color:var(--ink);border:1px solid #475569;border-radius:8px;padding:7px 10px;cursor:pointer}
+  button:hover{border-color:var(--accent);color:#fff}
+  button.primary{background:#075985;border-color:#0284c7}
+  button.ok{background:#065f46;border-color:#059669}
+  button.warn{background:#78350f;border-color:#d97706}
+  button.danger{background:#7f1d1d;border-color:#ef4444}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .grid{display:grid;gap:12px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .tight{gap:6px}
+  .small{font-size:12px;color:var(--muted)}
+  .mono{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .regs{display:grid;grid-template-columns:repeat(6,minmax(68px,1fr));gap:8px}
+  .reg{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:8px}
+  .reg label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+  .reg input{width:100%;font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;text-transform:uppercase;padding:4px 6px}
+  .flags{display:grid;grid-template-columns:repeat(8,minmax(52px,1fr));gap:8px}
+  .flag{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:7px 8px;text-align:center}
+  .flag b{display:block;color:var(--muted);font-size:11px;font-weight:600}
+  .flag span{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:16px}
+  .status-ok{color:var(--ok)} .status-warn{color:var(--warn)} .status-err{color:var(--err)}
+  table{border-collapse:collapse;width:100%}
+  .memwrap{overflow:auto;max-height:490px;border:1px solid var(--line);border-radius:8px;background:var(--code)}
+  .mem th,.mem td{border:1px solid #1e293b;padding:0;text-align:center;font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:12px;white-space:nowrap}
+  .mem th{color:var(--muted);background:#020617;position:sticky;top:0;z-index:1;padding:4px 5px}
+  .mem .addr{color:var(--accent);background:#020617;padding:4px 6px;position:sticky;left:0;z-index:2}
+  .mem button{font-family:inherit;font-size:12px;border:0;background:transparent;color:var(--ink);border-radius:0;width:30px;padding:4px 2px}
+  .mem button:hover{background:#334155}
+  .mem button.pc{background:var(--pc);color:#ecfeff;font-weight:700}
+  .mem button.data{color:#d1d5db}
+  .mem button.nonzero{color:#fde68a}
+  pre{margin:0;background:var(--code);border:1px solid var(--line);border-radius:8px;padding:10px;white-space:pre-wrap;overflow:auto;max-height:320px;font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:12px}
+  .log{max-height:170px}
+  .pill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:2px 7px;background:var(--code);font-size:12px;color:var(--muted)}
+  .tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+  .tabbtn[aria-selected=true]{border-color:var(--accent);background:#0c4a6e;color:#fff}
+  .hidden{display:none!important}
+  .split3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  details{border:1px solid var(--line);border-radius:8px;background:var(--code);padding:8px 10px}
+  summary{cursor:pointer;color:var(--accent)}
+  code{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;background:#020617;border:1px solid #1e293b;padding:1px 4px;border-radius:4px}
+  @media(max-width:980px){main{grid-template-columns:1fr}.regs{grid-template-columns:repeat(3,1fr)}.flags{grid-template-columns:repeat(4,1fr)}.cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>KUE-CHIP2 Web Emulator / Assembler / Disassembler</h1>
+  <div class="sub">8-bit CPU / 512-byte memory / ACC・IX・PC・CF・VF・NF・ZF / program: 000h-0FFh, data: 100h-1FFh</div>
+</header>
+<main>
+  <div class="grid">
+    <section>
+      <h2>アセンブラ <span class="pill">公式命令 + ORG/DB拡張</span></h2>
+      <div class="body grid">
+        <textarea id="asmSource" spellcheck="false"></textarea>
+        <div class="row">
+          <button id="assembleLoad" class="primary">Assemble & Load</button>
+          <button id="assembleOnly">Assemble</button>
+          <button id="loadSample">Sample</button>
+          <button id="clearSource">Clear</button>
+        </div>
+        <div class="small">コメント: <code>;</code>, <code>#</code>, 行頭<code>*</code>。拡張ディレクティブ: <code>ORG</code>, <code>DB</code>/<code>.BYTE</code>。</div>
+        <pre id="asmResult" class="log"></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>機械語ロード / ディスアセンブル</h2>
+      <div class="body grid">
+        <textarea id="hexInput" spellcheck="false" style="min-height:115px" placeholder="例: 00: 62 01 10 47 30 02"></textarea>
+        <div class="row">
+          <button id="loadHex" class="primary">Load Hex</button>
+          <button id="disasmProg">Disassemble Program</button>
+          <button id="disasmAll">Disassemble 000h-0FFh</button>
+        </div>
+        <pre id="disasmOutput"></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>入出力</h2>
+      <div class="body grid">
+        <div class="cols">
+          <div>
+            <div class="small">入力キュー IBUF。数値は空白・カンマ区切り。<code>IN</code>で先頭を読む。</div>
+            <textarea id="inputQueue" spellcheck="false" style="min-height:90px" placeholder="41 42 43"></textarea>
+            <div class="row tight" style="margin-top:8px">
+              <button id="setInput">Set Input</button>
+              <button id="clearInput">Clear Input</button>
+            </div>
+          </div>
+          <div>
+            <div class="small">出力 OBUF。<code>OUT</code>でACCを書き込む。BNOはOBUF_FLAG=1で分岐。</div>
+            <pre id="outputLog" class="log"></pre>
+            <div class="row tight" style="margin-top:8px">
+              <button id="clearObuf">Clear OBUF_FLAG</button>
+              <button id="clearOutput">Clear Output</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section>
+      <h2>CPU制御 <span id="runState" class="pill">stopped</span></h2>
+      <div class="body grid">
+        <div class="row">
+          <button id="resetCpu">Reset CPU</button>
+          <button id="stepOne" class="primary">Step</button>
+          <button id="runPause" class="ok">Run</button>
+          <button id="run1000">Run 1000</button>
+          <button id="stopCpu" class="warn">Stop</button>
+          <button id="clearMem" class="danger">Clear Memory</button>
+          <button id="selfTest">Self-test</button>
+        </div>
+        <div class="regs">
+          <div class="reg"><label>PC</label><input id="regPC" maxlength="2"></div>
+          <div class="reg"><label>ACC</label><input id="regACC" maxlength="2"></div>
+          <div class="reg"><label>IX</label><input id="regIX" maxlength="2"></div>
+          <div class="reg"><label>IBUF</label><input id="regIBUF" maxlength="2"></div>
+          <div class="reg"><label>OBUF</label><input id="regOBUF" maxlength="2"></div>
+          <div class="reg"><label>Steps</label><input id="regSteps" readonly></div>
+        </div>
+        <div class="flags">
+          <div class="flag"><b>CF</b><span id="flagCF">0</span></div>
+          <div class="flag"><b>VF</b><span id="flagVF">0</span></div>
+          <div class="flag"><b>NF</b><span id="flagNF">0</span></div>
+          <div class="flag"><b>ZF</b><span id="flagZF">0</span></div>
+          <div class="flag"><b>IBUF_FLAG</b><span id="flagIBUF">0</span></div>
+          <div class="flag"><b>OBUF_FLAG</b><span id="flagOBUF">0</span></div>
+          <div class="flag"><b>HALT</b><span id="flagHALT">0</span></div>
+          <div class="flag"><b>Last</b><span id="lastInst">--</span></div>
+        </div>
+        <pre id="cpuLog" class="log"></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>メモリ <span class="pill">クリックで編集</span></h2>
+      <div class="body grid">
+        <div class="tabs" role="tablist">
+          <button class="tabbtn" data-tab="program" aria-selected="true">Program 000h-0FFh</button>
+          <button class="tabbtn" data-tab="data" aria-selected="false">Data 100h-1FFh</button>
+          <button class="tabbtn" data-tab="hexdump" aria-selected="false">Hexdump</button>
+        </div>
+        <div id="tab-program" class="memwrap"></div>
+        <div id="tab-data" class="memwrap hidden"></div>
+        <pre id="tab-hexdump" class="hidden"></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>仕様メモ</h2>
+      <div class="body">
+        <details>
+          <summary>実装上の扱い</summary>
+          <ul>
+            <li><code>LD/ST/IN/OUT/NOP/HLT/分岐</code>はフラグを変更しない。</li>
+            <li><code>ADD/SUB/CMP</code>はCFを変更せず、<code>ADC/SBC</code>はCFを更新する。</li>
+            <li><code>B=011</code>は仕様上<code>01-</code>の即値としてデコードする。アセンブラは代表コード<code>B=010</code>を出力する。</li>
+            <li><code>0101----</code>は未使用HLTとして扱う。<code>ST</code>の不正オペランドは実行時エラーで停止する。</li>
+            <li><code>BNO</code>は<code>OBUF_FLAG=1</code>で分岐、<code>BNI</code>は<code>IBUF_FLAG=0</code>で分岐する。</li>
+          </ul>
+        </details>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const U8 = (n) => n & 0xff;
+  const HEX = (n, w = 2) => U8(n).toString(16).toUpperCase().padStart(w, '0');
+  const HEXFULL = (n, w = 2) => (n >>> 0).toString(16).toUpperCase().padStart(w, '0');
+  const S8 = (n) => (n & 0x80) ? n - 0x100 : n;
+  const isIdent = (s) => /^[A-Za-z_.$][A-Za-z0-9_.$]*$/.test(s);
+
+  const BRANCH_CODES = {
+    BA:0x0, BNZ:0x1, BZP:0x2, BP:0x3, BNI:0x4, BNC:0x5, BGE:0x6, BGT:0x7,
+    BVF:0x8, BZ:0x9, BN:0xA, BZN:0xB, BNO:0xC, BC:0xD, BLT:0xE, BLE:0xF
+  };
+  const BRANCH_NAMES = Object.fromEntries(Object.entries(BRANCH_CODES).map(([k,v]) => [v,k]));
+  const SHIFT_CODES = {SRA:0, SLA:1, SRL:2, SLL:3, RRA:4, RLA:5, RRL:6, RLL:7};
+  const SHIFT_NAMES = Object.fromEntries(Object.entries(SHIFT_CODES).map(([k,v]) => [v,k]));
+  const OP_BASE = {LD:0x60, ST:0x70, SBC:0x80, ADC:0x90, SUB:0xA0, ADD:0xB0, EOR:0xC0, OR:0xD0, AND:0xE0, CMP:0xF0};
+  const OP_BY_NIBBLE = {0x6:'LD',0x7:'ST',0x8:'SBC',0x9:'ADC',0xA:'SUB',0xB:'ADD',0xC:'EOR',0xD:'OR',0xE:'AND',0xF:'CMP'};
+  const NOARG_CANON = {NOP:0x00, HLT:0x0F, OUT:0x10, IN:0x1F, RCF:0x20, SCF:0x2F};
+
+  class KueChip2 {
+    constructor() { this.mem = new Uint8Array(512); this.resetCpu(); this.outputLog = []; this.inputQueue = []; }
+    resetCpu() {
+      this.acc = 0; this.ix = 0; this.pc = 0; this.cf = 0; this.vf = 0; this.nf = 0; this.zf = 0;
+      this.ibuf = 0; this.obuf = 0; this.obufFlag = 0; this.halted = false; this.error = '';
+      this.steps = 0; this.last = '--'; this.trace = [];
+    }
+    clearMemory() { this.mem.fill(0); this.resetCpu(); this.outputLog = []; this.inputQueue = []; }
+    loadImage(image, clear = true) {
+      if (clear) this.mem.fill(0);
+      for (const [addr, value] of image) {
+        if (addr < 0 || addr > 511) throw new Error(`address out of range: ${addr}`);
+        this.mem[addr] = U8(value);
+      }
+      this.resetCpu();
+    }
+    get ibufFlag() { return this.inputQueue.length > 0 ? 1 : 0; }
+    readOperand(b, ext) {
+      switch (b) {
+        case 0: return this.acc;
+        case 1: return this.ix;
+        case 2: case 3: return U8(ext);
+        case 4: return this.mem[U8(ext)];
+        case 5: return this.mem[0x100 + U8(ext)];
+        case 6: return this.mem[U8(this.ix + ext)];
+        case 7: return this.mem[0x100 + U8(this.ix + ext)];
+        default: throw new Error('bad operand mode');
+      }
+    }
+    writeMemoryOperand(b, ext, value) {
+      switch (b) {
+        case 4: this.mem[U8(ext)] = U8(value); return;
+        case 5: this.mem[0x100 + U8(ext)] = U8(value); return;
+        case 6: this.mem[U8(this.ix + ext)] = U8(value); return;
+        case 7: this.mem[0x100 + U8(this.ix + ext)] = U8(value); return;
+        default: throw new Error('ST requires memory reference operand');
+      }
+    }
+    setReg(a, value) { if (a) this.ix = U8(value); else this.acc = U8(value); }
+    getReg(a) { return a ? this.ix : this.acc; }
+    setNZ(value) { const r = U8(value); this.nf = (r & 0x80) ? 1 : 0; this.zf = r === 0 ? 1 : 0; }
+    setVNForSignedRange(signedWide, result) { this.vf = (signedWide < -128 || signedWide > 127) ? 1 : 0; this.setNZ(result); }
+    branchCondition(cc) {
+      switch (cc) {
+        case 0x0: return true;
+        case 0x1: return this.zf === 0;
+        case 0x2: return this.nf === 0;
+        case 0x3: return this.nf === 0 && this.zf === 0;
+        case 0x4: return this.ibufFlag === 0;
+        case 0x5: return this.cf === 0;
+        case 0x6: return (this.vf ^ this.nf) === 0;
+        case 0x7: return (this.vf ^ this.nf) === 0 && this.zf === 0;
+        case 0x8: return this.vf === 1;
+        case 0x9: return this.zf === 1;
+        case 0xA: return this.nf === 1;
+        case 0xB: return this.nf === 1 || this.zf === 1;
+        case 0xC: return this.obufFlag === 1;
+        case 0xD: return this.cf === 1;
+        case 0xE: return (this.vf ^ this.nf) === 1;
+        case 0xF: return (this.vf ^ this.nf) === 1 || this.zf === 1;
+        default: return false;
+      }
+    }
+    execShift(ir) {
+      const a = (ir >> 3) & 1;
+      const rotate = (ir >> 2) & 1;
+      const mode = ir & 3;
+      const old = this.getReg(a);
+      let res = old, newCf = this.cf, newVf = 0;
+      if (!rotate && mode === 0) { // SRA
+        res = (old & 0x80) | (old >> 1); newCf = old & 1; newVf = 0;
+      } else if (!rotate && mode === 1) { // SLA
+        res = U8(old << 1); newCf = (old >> 7) & 1; newVf = ((old ^ res) & 0x80) ? 1 : 0;
+      } else if (!rotate && mode === 2) { // SRL
+        res = old >> 1; newCf = old & 1; newVf = 0;
+      } else if (!rotate && mode === 3) { // SLL
+        res = U8(old << 1); newCf = (old >> 7) & 1; newVf = 0;
+      } else if (rotate && mode === 0) { // RRA: through carry
+        res = ((this.cf & 1) << 7) | (old >> 1); newCf = old & 1; newVf = 0;
+      } else if (rotate && mode === 1) { // RLA: through carry
+        res = U8((old << 1) | (this.cf & 1)); newCf = (old >> 7) & 1; newVf = ((old ^ res) & 0x80) ? 1 : 0;
+      } else if (rotate && mode === 2) { // RRL: circular
+        res = ((old & 1) << 7) | (old >> 1); newCf = old & 1; newVf = 0;
+      } else if (rotate && mode === 3) { // RLL: circular
+        res = U8((old << 1) | ((old >> 7) & 1)); newCf = (old >> 7) & 1; newVf = 0;
+      }
+      this.setReg(a, res); this.cf = newCf; this.vf = newVf; this.setNZ(res);
+    }
+    step() {
+      if (this.halted) return { ok:false, message:'halted' };
+      const pc0 = this.pc;
+      const ir = this.mem[this.pc];
+      this.pc = U8(this.pc + 1);
+      const decoded = decodeAt(this.mem, pc0);
+      try {
+        if ((ir & 0xF8) === 0x00) { // NOP 00000---
+        } else if ((ir & 0xF8) === 0x08 || (ir & 0xF0) === 0x50) { // HLT / unused HLT
+          this.halted = true;
+        } else if ((ir & 0xF8) === 0x10) { // OUT
+          this.obuf = this.acc; this.obufFlag = 1; this.outputLog.push(this.acc);
+        } else if ((ir & 0xF8) === 0x18) { // IN
+          this.ibuf = this.inputQueue.length ? this.inputQueue.shift() : 0; this.acc = this.ibuf;
+        } else if ((ir & 0xF8) === 0x20) {
+          this.cf = 0;
+        } else if ((ir & 0xF8) === 0x28) {
+          this.cf = 1;
+        } else if ((ir & 0xF0) === 0x30) {
+          const addr = this.mem[this.pc]; this.pc = U8(this.pc + 1);
+          if (this.branchCondition(ir & 0x0F)) this.pc = addr;
+        } else if ((ir & 0xF0) === 0x40) {
+          this.execShift(ir);
+        } else if (ir >= 0x60) {
+          const op = OP_BY_NIBBLE[ir >> 4];
+          const a = (ir >> 3) & 1;
+          const b = ir & 0x7;
+          const needsExt = b >= 2;
+          const ext = needsExt ? this.mem[this.pc] : 0;
+          if (needsExt) this.pc = U8(this.pc + 1);
+          const left = this.getReg(a);
+          if (op === 'ST') {
+            if (b < 4) throw new Error(`invalid ST addressing mode: ${HEX(ir)}h`);
+            this.writeMemoryOperand(b, ext, left);
+          } else {
+            const right = this.readOperand(b, ext);
+            let res, wide;
+            switch (op) {
+              case 'LD': this.setReg(a, right); break;
+              case 'ADC': {
+                const cin = this.cf;
+                wide = left + right + cin; res = U8(wide); this.cf = wide > 0xff ? 1 : 0;
+                this.setVNForSignedRange(S8(left) + S8(right) + cin, res); this.setReg(a, res); break;
+              }
+              case 'SBC': {
+                const cin = this.cf;
+                wide = left - right - cin; res = U8(wide); this.cf = wide < 0 ? 1 : 0;
+                this.setVNForSignedRange(S8(left) - S8(right) - cin, res); this.setReg(a, res); break;
+              }
+              case 'ADD':
+                wide = left + right; res = U8(wide); this.setVNForSignedRange(S8(left) + S8(right), res); this.setReg(a, res); break;
+              case 'SUB':
+                wide = left - right; res = U8(wide); this.setVNForSignedRange(S8(left) - S8(right), res); this.setReg(a, res); break;
+              case 'CMP':
+                wide = left - right; res = U8(wide); this.setVNForSignedRange(S8(left) - S8(right), res); break;
+              case 'EOR':
+                res = left ^ right; this.vf = 0; this.setNZ(res); this.setReg(a, res); break;
+              case 'OR':
+                res = left | right; this.vf = 0; this.setNZ(res); this.setReg(a, res); break;
+              case 'AND':
+                res = left & right; this.vf = 0; this.setNZ(res); this.setReg(a, res); break;
+              default: throw new Error(`unknown opcode ${HEX(ir)}h`);
+            }
+          }
+        } else {
+          throw new Error(`unknown opcode ${HEX(ir)}h`);
+        }
+        this.steps++;
+        this.last = decoded.asm;
+        this.trace.unshift(`${HEX(pc0)}: ${decoded.bytesText.padEnd(8)} ${decoded.asm}`);
+        if (this.trace.length > 12) this.trace.pop();
+        return { ok:true, message:this.last };
+      } catch (e) {
+        this.halted = true; this.error = e.message;
+        this.trace.unshift(`${HEX(pc0)}: ERROR ${e.message}`);
+        return { ok:false, message:e.message };
+      }
+    }
+  }
+
+  function stripComment(line) {
+    const raw = line.replace(/\r/g, '');
+    if (/^\s*\*/.test(raw)) return '';
+    let quote = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === "'") quote = !quote;
+      if (!quote && (ch === ';' || ch === '#')) return raw.slice(0, i);
+    }
+    return raw;
+  }
+  function splitOperands(s) {
+    const out = []; let cur = ''; let level = 0; let quote = false;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === "'") quote = !quote;
+      if (!quote && (ch === '[' || ch === '(')) level++;
+      if (!quote && (ch === ']' || ch === ')')) level--;
+      if (!quote && level === 0 && ch === ',') { out.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    if (cur.trim() || s.includes(',')) out.push(cur.trim());
+    return out.filter(x => x.length);
+  }
+  function parseNumberToken(tok) {
+    const t = tok.trim();
+    if (/^'.'$/.test(t)) return t.charCodeAt(1);
+    if (/^'\\n'$/.test(t)) return 10;
+    if (/^'\\r'$/.test(t)) return 13;
+    if (/^'\\t'$/.test(t)) return 9;
+    if (/^0x[0-9a-f]+$/i.test(t)) return parseInt(t.slice(2), 16);
+    if (/^\$[0-9a-f]+$/i.test(t)) return parseInt(t.slice(1), 16);
+    if (/^[0-9a-f]+h$/i.test(t)) return parseInt(t.slice(0, -1), 16);
+    if (/^0b[01]+$/i.test(t)) return parseInt(t.slice(2), 2);
+    if (/^[-+]?\d+$/.test(t)) return parseInt(t, 10);
+    return null;
+  }
+  function evalExpr(expr, symbols, lineNo) {
+    let s = expr.trim();
+    if (!s) throw new Error(`line ${lineNo}: empty expression`);
+    s = s.replace(/\s+/g, '');
+    const parts = s.match(/[+-]?[^+-]+/g);
+    if (!parts) throw new Error(`line ${lineNo}: bad expression ${expr}`);
+    let total = 0;
+    for (const part of parts) {
+      const sign = part[0] === '-' ? -1 : 1;
+      const body = (part[0] === '+' || part[0] === '-') ? part.slice(1) : part;
+      let val = parseNumberToken(body);
+      if (val === null) {
+        const key = body.toUpperCase();
+        if (!(key in symbols)) throw new Error(`line ${lineNo}: undefined symbol ${body}`);
+        val = symbols[key];
+      }
+      total += sign * val;
+    }
+    return total;
+  }
+  function parseOperand(opText) {
+    const t = opText.trim();
+    const u = t.toUpperCase().replace(/\s+/g, '');
+    if (u === 'ACC') return { mode:0, hasExt:false, expr:null, region:null };
+    if (u === 'IX') return { mode:1, hasExt:false, expr:null, region:null };
+    let m = t.match(/^\[(.*)\]$/);
+    if (m) return parseMemoryInner(m[1], 'program');
+    m = t.match(/^\((.*)\)$/);
+    if (m) return parseMemoryInner(m[1], 'data');
+    return { mode:2, hasExt:true, expr:t, region:'immediate' };
+  }
+  function parseMemoryInner(inner, region) {
+    const compact = inner.trim().replace(/\s+/g, '');
+    const up = compact.toUpperCase();
+    const indexed = /(^IX\+)|((\+IX)$)|(^IX$)/.test(up);
+    if (indexed) {
+      let expr = compact.replace(/(^IX\+?)|(\+IX$)/ig, '');
+      if (!expr) expr = '0';
+      return { mode: region === 'program' ? 6 : 7, hasExt:true, expr, region };
+    }
+    return { mode: region === 'program' ? 4 : 5, hasExt:true, expr:inner.trim(), region };
+  }
+  function encodeOperandByte(parsed, symbols, lineNo, warnings) {
+    if (!parsed.hasExt) return null;
+    const val = evalExpr(parsed.expr, symbols, lineNo);
+    if (parsed.region === 'data' && val >= 0x100 && val <= 0x1ff) return val - 0x100;
+    if (parsed.region === 'program' && val >= 0x100 && val <= 0x1ff) warnings.push(`line ${lineNo}: program memory reference uses data-region label ${HEXFULL(val,3)}h; low byte emitted`);
+    if ((parsed.region === 'immediate' || parsed.region === 'program') && (val < 0 || val > 0xff)) warnings.push(`line ${lineNo}: ${parsed.region} value ${val} truncated to ${HEX(val)}h`);
+    return U8(val);
+  }
+  function tokenizeLine(line) {
+    const cleaned = stripComment(line).trim();
+    if (!cleaned) return null;
+    let rest = cleaned;
+    const labels = [];
+    while (true) {
+      const m = rest.match(/^([A-Za-z_.$][\w.$]*):\s*(.*)$/);
+      if (!m) break;
+      labels.push(m[1].toUpperCase()); rest = m[2].trim();
+      if (!rest) break;
+    }
+    if (!rest) return { labels, mnemonic:null, operands:[] };
+    const first = rest.match(/^(\S+)(?:\s+(.*))?$/);
+    if (!first) return { labels, mnemonic:null, operands:[] };
+    const mnemonic = first[1].toUpperCase();
+    const argstr = (first[2] || '').trim();
+    return { labels, mnemonic, operands: splitOperands(argstr), argstr, raw: cleaned };
+  }
+  function instrSize(tok, lineNo) {
+    if (!tok.mnemonic) return 0;
+    const m = tok.mnemonic;
+    if (m === 'END') return 0;
+    if (m === 'ORG' || m === '.ORG') return 0;
+    if (m === 'DB' || m === '.DB' || m === 'BYTE' || m === '.BYTE') return countDbItems(tok.argstr || '', lineNo);
+    if (m === 'EQU') return 0;
+    if (NOARG_CANON[m] !== undefined) return 1;
+    if (BRANCH_CODES[m] !== undefined) return 2;
+    if (SHIFT_CODES[m] !== undefined) return 1;
+    if (OP_BASE[m] !== undefined) {
+      if (tok.operands.length !== 2) throw new Error(`line ${lineNo}: ${m} needs 2 operands`);
+      const b = parseOperand(tok.operands[1]);
+      return 1 + (b.hasExt ? 1 : 0);
+    }
+    throw new Error(`line ${lineNo}: unknown mnemonic ${m}`);
+  }
+  function parseDbItems(argstr, symbols, lineNo) {
+    const items = splitOperands(argstr); const out = [];
+    for (const item of items) {
+      const s = item.trim();
+      if (/^'.*'$/.test(s) && s.length > 3) {
+        let body = s.slice(1, -1).replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t');
+        for (const ch of body) out.push(ch.charCodeAt(0) & 0xff);
+      } else out.push(U8(evalExpr(s, symbols, lineNo)));
+    }
+    return out;
+  }
+  function countDbItems(argstr, lineNo) {
+    const items = splitOperands(argstr); let n = 0;
+    for (const item of items) {
+      const s = item.trim();
+      if (!s) continue;
+      if (/^'.*'$/.test(s) && s.length > 3) n += s.slice(1, -1).replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t').length;
+      else n++;
+    }
+    return n;
+  }
+  function assemble(source) {
+    const lines = source.split(/\n/);
+    const parsed = [];
+    const symbols = {};
+    let loc = 0;
+    const warnings = [];
+    for (let i = 0; i < lines.length; i++) {
+      const tok = tokenizeLine(lines[i]);
+      if (!tok) { parsed.push(null); continue; }
+      tok.lineNo = i + 1; tok.loc = loc; parsed.push(tok);
+      // NAME EQU expr without colon
+      if (tok.mnemonic && tok.operands.length === 1 && tok.argstr && /^EQU\s+/i.test(tok.argstr)) {}
+      if (tok.labels.length) for (const label of tok.labels) symbols[label] = loc;
+      // NAME EQU value
+      const equNoColon = tok.raw.match(/^([A-Za-z_.$][\w.$]*)\s+EQU\s+(.+)$/i);
+      if (equNoColon) { symbols[equNoColon[1].toUpperCase()] = evalExpr(equNoColon[2], symbols, i + 1); tok.mnemonic = 'EQU'; tok.operands = [equNoColon[2]]; continue; }
+      if (!tok.mnemonic) continue;
+      if (tok.mnemonic === 'END') break;
+      if (tok.mnemonic === 'EQU') {
+        if (!tok.labels.length) throw new Error(`line ${i+1}: EQU requires label`);
+        symbols[tok.labels[tok.labels.length - 1]] = evalExpr(tok.argstr || tok.operands.join(','), symbols, i + 1);
+        continue;
+      }
+      if (tok.mnemonic === 'ORG' || tok.mnemonic === '.ORG') {
+        if (tok.operands.length !== 1) throw new Error(`line ${i+1}: ORG needs 1 operand`);
+        loc = evalExpr(tok.operands[0], symbols, i + 1);
+        if (loc < 0 || loc > 511) throw new Error(`line ${i+1}: ORG out of 000h-1FFh`);
+        continue;
+      }
+      const size = instrSize(tok, i + 1);
+      if (loc < 0 || loc + size - 1 > 511) throw new Error(`line ${i+1}: output address out of memory`);
+      loc += size;
+    }
+    const image = [];
+    const listing = [];
+    loc = 0;
+    const emit = (addr, byte) => { image.push([addr, U8(byte)]); };
+    for (let i = 0; i < parsed.length; i++) {
+      const tok = parsed[i]; if (!tok) continue;
+      let m = tok.mnemonic; if (!m) continue;
+      const lineNo = tok.lineNo;
+      const equNoColon = tok.raw && tok.raw.match(/^([A-Za-z_.$][\w.$]*)\s+EQU\s+(.+)$/i);
+      if (equNoColon) continue;
+      if (m === 'END') break;
+      if (m === 'EQU') continue;
+      if (m === 'ORG' || m === '.ORG') { loc = evalExpr(tok.operands[0], symbols, lineNo); continue; }
+      if (m === 'DB' || m === '.DB' || m === 'BYTE' || m === '.BYTE') {
+        const bytes = parseDbItems(tok.argstr || '', symbols, lineNo);
+        for (const b of bytes) { emit(loc, b); listing.push(`${HEXFULL(loc,3)}: ${HEX(b)}        DB ${HEX(b)}h`); loc++; }
+        continue;
+      }
+      const out = [];
+      if (NOARG_CANON[m] !== undefined) {
+        if (tok.operands.length !== 0) throw new Error(`line ${lineNo}: ${m} takes no operands`);
+        out.push(NOARG_CANON[m]);
+      } else if (BRANCH_CODES[m] !== undefined) {
+        if (tok.operands.length !== 1) throw new Error(`line ${lineNo}: ${m} needs branch target`);
+        out.push(0x30 | BRANCH_CODES[m], U8(evalExpr(tok.operands[0], symbols, lineNo)));
+      } else if (SHIFT_CODES[m] !== undefined) {
+        const reg = (tok.operands[0] || 'ACC').trim().toUpperCase();
+        if (reg !== 'ACC' && reg !== 'IX') throw new Error(`line ${lineNo}: shift target must be ACC or IX`);
+        out.push(0x40 | (reg === 'IX' ? 0x08 : 0) | SHIFT_CODES[m]);
+      } else if (OP_BASE[m] !== undefined) {
+        if (tok.operands.length !== 2) throw new Error(`line ${lineNo}: ${m} needs 2 operands`);
+        const reg = tok.operands[0].trim().toUpperCase();
+        if (reg !== 'ACC' && reg !== 'IX') throw new Error(`line ${lineNo}: first operand must be ACC or IX`);
+        const op2 = parseOperand(tok.operands[1]);
+        if (m === 'ST' && op2.mode < 4) throw new Error(`line ${lineNo}: ST second operand must be [d], (d), [IX+d], or (IX+d)`);
+        out.push(OP_BASE[m] | (reg === 'IX' ? 0x08 : 0) | op2.mode);
+        const ext = encodeOperandByte(op2, symbols, lineNo, warnings);
+        if (op2.hasExt) out.push(ext);
+      } else throw new Error(`line ${lineNo}: unknown mnemonic ${m}`);
+      if (loc < 0 || loc + out.length - 1 > 511) throw new Error(`line ${lineNo}: output address out of memory`);
+      for (const b of out) emit(loc++, b);
+      listing.push(`${HEXFULL(loc - out.length,3)}: ${out.map(b => HEX(b)).join(' ').padEnd(8)} ${tok.raw}`);
+    }
+    const highest = image.reduce((max, [addr]) => Math.max(max, addr), 0);
+    return { image, listing, symbols, warnings, highest };
+  }
+
+  function operandText(b, ext) {
+    const h = `${HEX(ext)}h`;
+    switch (b) {
+      case 0: return 'ACC';
+      case 1: return 'IX';
+      case 2: case 3: return h;
+      case 4: return `[${h}]`;
+      case 5: return `(${h})`;
+      case 6: return `[IX+${h}]`;
+      case 7: return `(IX+${h})`;
+      default: return `?${b}`;
+    }
+  }
+  function decodeAt(mem, pc) {
+    const ir = mem[pc & 0xff];
+    let size = 1, asm = `.DB ${HEX(ir)}h`, invalid = false;
+    if ((ir & 0xF8) === 0x00) asm = 'NOP';
+    else if ((ir & 0xF8) === 0x08 || (ir & 0xF0) === 0x50) asm = 'HLT';
+    else if ((ir & 0xF8) === 0x10) asm = 'OUT';
+    else if ((ir & 0xF8) === 0x18) asm = 'IN';
+    else if ((ir & 0xF8) === 0x20) asm = 'RCF';
+    else if ((ir & 0xF8) === 0x28) asm = 'SCF';
+    else if ((ir & 0xF0) === 0x30) { size = 2; asm = `${BRANCH_NAMES[ir & 0x0F]} ${HEX(mem[(pc + 1) & 0xff])}h`; }
+    else if ((ir & 0xF0) === 0x40) { asm = `${SHIFT_NAMES[ir & 0x07]} ${((ir >> 3) & 1) ? 'IX' : 'ACC'}`; }
+    else if (ir >= 0x60) {
+      const op = OP_BY_NIBBLE[ir >> 4]; const a = (ir >> 3) & 1; const b = ir & 7; const reg = a ? 'IX' : 'ACC';
+      if (b >= 2) size = 2;
+      const ext = mem[(pc + 1) & 0xff];
+      if (op === 'ST' && b < 4) { asm = `.DB ${HEX(ir)}h ; invalid ST operand`; invalid = true; size = 1; }
+      else asm = `${op} ${reg}, ${operandText(b, ext)}`;
+    }
+    const bytes = Array.from({length:size}, (_,i)=>mem[(pc+i)&0xff]);
+    return { pc, ir, size, asm, invalid, bytes, bytesText: bytes.map(b=>HEX(b)).join(' ') };
+  }
+  function disassemble(mem, start = 0, end = 255, stopAtHlt = false) {
+    const lines = []; let pc = start & 0xff;
+    while (pc <= end) {
+      const d = decodeAt(mem, pc);
+      lines.push(`${HEX(pc)}: ${d.bytesText.padEnd(8)} ${d.asm}`);
+      pc += d.size;
+      if (stopAtHlt && /^HLT$/.test(d.asm)) break;
+      if (d.size <= 0) pc++;
+    }
+    return lines.join('\n');
+  }
+  function parseHexText(text) {
+    const image = []; let loc = 0;
+    const lines = text.split(/\n/);
+    for (const line0 of lines) {
+      let line = stripComment(line0).trim(); if (!line) continue;
+      const addrMatch = line.match(/^([0-9A-Fa-f]{1,3}|0x[0-9A-Fa-f]{1,3}|[0-9A-Fa-f]{1,3}h)\s*:\s*(.*)$/);
+      if (addrMatch) {
+        const aTok = addrMatch[1];
+        loc = parseNumberToken(/^[0-9A-Fa-f]{1,3}$/.test(aTok) ? aTok + 'h' : aTok);
+        line = addrMatch[2];
+      }
+      const toks = line.match(/0x[0-9a-fA-F]{1,2}|\$[0-9a-fA-F]{1,2}|[0-9a-fA-F]{1,2}h|\b[0-9a-fA-F]{1,2}\b/g) || [];
+      for (const t of toks) {
+        const v = parseNumberToken(/^[0-9a-fA-F]{1,2}$/.test(t) ? t + 'h' : t);
+        image.push([loc, U8(v)]); loc = (loc + 1) & 0x1ff;
+      }
+    }
+    return image;
+  }
+  function hexdump(mem, start = 0, end = 511) {
+    const lines = [];
+    for (let base = start; base <= end; base += 16) {
+      const bytes = Array.from({length:16}, (_,i)=>base+i <= end ? HEX(mem[base+i]) : '  ');
+      lines.push(`${HEXFULL(base,3)}: ${bytes.join(' ')}`);
+    }
+    return lines.join('\n');
+  }
+
+  const cpu = new KueChip2();
+  let runTimer = null;
+  let lastAssembly = null;
+
+  const sample = `; KUE-CHIP2 sample: ACCを左回転して出力し続ける\n        LD  ACC, 01h\nLOOP:   OUT\n        RLL ACC\n        BA  LOOP\n        END\n`;
+  $('asmSource').value = sample;
+  $('hexInput').value = '00: 62 01 10 47 30 02';
+
+  function updateUI() {
+    $('regPC').value = HEX(cpu.pc); $('regACC').value = HEX(cpu.acc); $('regIX').value = HEX(cpu.ix);
+    $('regIBUF').value = HEX(cpu.ibuf); $('regOBUF').value = HEX(cpu.obuf); $('regSteps').value = String(cpu.steps);
+    $('flagCF').textContent = cpu.cf; $('flagVF').textContent = cpu.vf; $('flagNF').textContent = cpu.nf; $('flagZF').textContent = cpu.zf;
+    $('flagIBUF').textContent = cpu.ibufFlag; $('flagOBUF').textContent = cpu.obufFlag; $('flagHALT').textContent = cpu.halted ? 1 : 0;
+    $('lastInst').textContent = cpu.last.length > 9 ? cpu.last.slice(0,9) : cpu.last;
+    $('runState').textContent = cpu.error ? `error: ${cpu.error}` : (cpu.halted ? 'halted' : (runTimer ? 'running' : 'stopped'));
+    $('runState').className = 'pill ' + (cpu.error ? 'status-err' : cpu.halted ? 'status-warn' : runTimer ? 'status-ok' : '');
+    $('cpuLog').textContent = cpu.trace.join('\n') || 'trace: --';
+    const hexOut = cpu.outputLog.map(v => HEX(v)).join(' ');
+    const ascii = cpu.outputLog.map(v => (v >= 32 && v <= 126) ? String.fromCharCode(v) : '.').join('');
+    $('outputLog').textContent = `hex: ${hexOut || '--'}\nascii: ${ascii || '--'}\nOBUF=${HEX(cpu.obuf)} FLAG=${cpu.obufFlag}`;
+    renderMemory();
+  }
+  function renderMemoryTable(start, id) {
+    let html = '<table class="mem"><thead><tr><th>addr</th>';
+    for (let i=0;i<16;i++) html += `<th>+${i.toString(16).toUpperCase()}</th>`;
+    html += '</tr></thead><tbody>';
+    for (let r=0;r<16;r++) {
+      const base = start + r*16;
+      html += `<tr><th class="addr">${HEXFULL(base,3)}</th>`;
+      for (let c=0;c<16;c++) {
+        const addr = base + c; const val = cpu.mem[addr];
+        const cls = [addr < 0x100 ? '' : 'data', val ? 'nonzero' : '', addr === cpu.pc && addr < 0x100 ? 'pc' : ''].join(' ');
+        html += `<td><button class="${cls}" data-addr="${addr}">${HEX(val)}</button></td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    $(id).innerHTML = html;
+  }
+  function renderMemory() {
+    renderMemoryTable(0, 'tab-program');
+    renderMemoryTable(0x100, 'tab-data');
+    $('tab-hexdump').textContent = hexdump(cpu.mem, 0, 511);
+  }
+  function setRegFromInput(id, prop) {
+    const v = parseNumberToken($(id).value.trim() + (/h$/i.test($(id).value.trim()) || /^0x/i.test($(id).value.trim()) ? '' : 'h'));
+    if (v === null) return;
+    cpu[prop] = U8(v); updateUI();
+  }
+  function setFlagFromClick(flag) { cpu[flag] = cpu[flag] ? 0 : 1; updateUI(); }
+  function stopRun() { if (runTimer) { clearInterval(runTimer); runTimer = null; } updateUI(); }
+  function runSteps(max) {
+    let count = 0;
+    while (!cpu.halted && count < max) { cpu.step(); count++; }
+    if (cpu.halted) stopRun(); else updateUI();
+  }
+
+  $('assembleLoad').onclick = () => {
+    try {
+      const result = assemble($('asmSource').value); lastAssembly = result; cpu.loadImage(result.image, true);
+      $('asmResult').textContent = formatAssemblyResult(result);
+      $('disasmOutput').textContent = disassemble(cpu.mem, 0, Math.min(255, Math.max(0, result.highest)), true);
+      updateUI();
+    } catch (e) { $('asmResult').textContent = `ERROR: ${e.message}`; }
+  };
+  $('assembleOnly').onclick = () => {
+    try { const result = assemble($('asmSource').value); lastAssembly = result; $('asmResult').textContent = formatAssemblyResult(result); }
+    catch (e) { $('asmResult').textContent = `ERROR: ${e.message}`; }
+  };
+  function formatAssemblyResult(result) {
+    const syms = Object.keys(result.symbols).sort().map(k=>`${k}=${HEXFULL(result.symbols[k], result.symbols[k] > 255 ? 3 : 2)}h`).join('  ');
+    const img = result.image.slice().sort((a,b)=>a[0]-b[0]).map(([a,b])=>`${HEXFULL(a,3)}:${HEX(b)}`).join(' ');
+    const warn = result.warnings.length ? '\nWARNINGS:\n' + result.warnings.join('\n') : '';
+    return `OK: ${result.image.length} bytes\nSYMBOLS: ${syms || '--'}\nIMAGE: ${img || '--'}\n\nLISTING:\n${result.listing.join('\n')}${warn}`;
+  }
+  $('loadSample').onclick = () => { $('asmSource').value = sample; };
+  $('clearSource').onclick = () => { $('asmSource').value = ''; $('asmResult').textContent = ''; };
+  $('loadHex').onclick = () => { try { cpu.loadImage(parseHexText($('hexInput').value), true); $('disasmOutput').textContent = disassemble(cpu.mem, 0, 255, true); updateUI(); } catch(e){ $('disasmOutput').textContent = `ERROR: ${e.message}`; } };
+  $('disasmProg').onclick = () => { const end = lastAssembly ? Math.min(255, lastAssembly.highest) : 255; $('disasmOutput').textContent = disassemble(cpu.mem, 0, end, true); };
+  $('disasmAll').onclick = () => { $('disasmOutput').textContent = disassemble(cpu.mem, 0, 255, false); };
+  $('resetCpu').onclick = () => { stopRun(); cpu.resetCpu(); updateUI(); };
+  $('stepOne').onclick = () => { cpu.step(); updateUI(); };
+  $('run1000').onclick = () => { runSteps(1000); };
+  $('runPause').onclick = () => {
+    if (runTimer) { stopRun(); return; }
+    if (cpu.halted) cpu.halted = false;
+    runTimer = setInterval(() => runSteps(200), 30);
+    updateUI();
+  };
+  $('stopCpu').onclick = () => { stopRun(); cpu.halted = true; updateUI(); };
+  $('clearMem').onclick = () => { stopRun(); cpu.clearMemory(); updateUI(); $('disasmOutput').textContent = ''; };
+  $('setInput').onclick = () => { cpu.inputQueue = parseHexText($('inputQueue').value).map(x=>x[1]); if (cpu.inputQueue.length) cpu.ibuf = cpu.inputQueue[0]; updateUI(); };
+  $('clearInput').onclick = () => { cpu.inputQueue = []; updateUI(); };
+  $('clearObuf').onclick = () => { cpu.obufFlag = 0; updateUI(); };
+  $('clearOutput').onclick = () => { cpu.outputLog = []; cpu.obuf = 0; cpu.obufFlag = 0; updateUI(); };
+  $('selfTest').onclick = () => { $('cpuLog').textContent = runSelfTests().join('\n'); };
+
+  for (const [id, prop] of [['regPC','pc'],['regACC','acc'],['regIX','ix'],['regIBUF','ibuf'],['regOBUF','obuf']]) {
+    $(id).addEventListener('change', () => setRegFromInput(id, prop));
+  }
+  for (const [id, prop] of [['flagCF','cf'],['flagVF','vf'],['flagNF','nf'],['flagZF','zf']]) {
+    $(id).addEventListener('click', () => setFlagFromClick(prop));
+  }
+  $('flagOBUF').addEventListener('click', () => { cpu.obufFlag = cpu.obufFlag ? 0 : 1; updateUI(); });
+  document.body.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-addr]');
+    if (!btn) return;
+    const addr = Number(btn.dataset.addr);
+    const v = prompt(`${HEXFULL(addr,3)}h の値`, HEX(cpu.mem[addr]));
+    if (v == null) return;
+    const n = parseNumberToken(v.trim() + (/h$/i.test(v.trim()) || /^0x/i.test(v.trim()) ? '' : 'h'));
+    if (n !== null) { cpu.mem[addr] = U8(n); updateUI(); }
+  });
+  for (const btn of document.querySelectorAll('.tabbtn')) {
+    btn.addEventListener('click', () => {
+      for (const b of document.querySelectorAll('.tabbtn')) b.setAttribute('aria-selected', String(b === btn));
+      for (const id of ['program','data','hexdump']) $(`tab-${id}`).classList.toggle('hidden', id !== btn.dataset.tab);
+    });
+  }
+
+  function runSelfTests() {
+    const log = [];
+    const assert = (cond, msg) => { if (!cond) throw new Error(msg); log.push(`PASS ${msg}`); };
+    try {
+      let r = assemble('LD ACC,01h\nOUT\nRLL ACC\nBA 02h\nEND');
+      const bytes = r.image.filter(([a])=>a<0x100).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+      assert(bytes.join(',') === [0x62,0x01,0x10,0x47,0x30,0x02].join(','), 'sample assembly bytes');
+      const c = new KueChip2(); c.loadImage(r.image, true); c.step(); assert(c.acc === 1 && c.pc === 2, 'LD ACC immediate');
+      c.step(); assert(c.outputLog[0] === 1 && c.obufFlag === 1, 'OUT sets OBUF');
+      c.step(); assert(c.acc === 2 && c.cf === 0 && c.zf === 0, 'RLL ACC');
+      c.step(); assert(c.pc === 2, 'BA branch');
+      r = assemble('RCF\nLD ACC,0FFh\nADC ACC,01h\nHLT');
+      const c2 = new KueChip2(); c2.loadImage(r.image, true); c2.step(); c2.step(); c2.step();
+      assert(c2.acc === 0 && c2.cf === 1 && c2.zf === 1, 'ADC flags');
+      r = assemble('ORG 100h\nDATA: DB 2Ah\nORG 0\nLD ACC,(DATA)\nHLT');
+      const c3 = new KueChip2(); c3.loadImage(r.image, true); c3.step();
+      assert(c3.acc === 0x2a, 'data-region label in parentheses');
+      log.push('ALL TESTS PASSED');
+    } catch (e) { log.push(`FAIL ${e.message}`); }
+    return log;
+  }
+
+  updateUI();
+})();
+</script>
+</body>
+</html>
