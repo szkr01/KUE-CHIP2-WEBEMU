@@ -58,8 +58,7 @@
   .log{max-height:170px}
   .pill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:2px 7px;background:var(--code);font-size:12px;color:var(--muted)}
   .tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
-  .tabbtn[aria-selected=true],.machine-tab[aria-selected=true]{border-color:var(--accent);background:#0c4a6e;color:#fff}
-  .machine-tabs{margin-top:8px;margin-bottom:0}
+  .tabbtn[aria-selected=true]{border-color:var(--accent);background:#0c4a6e;color:#fff}
   .hidden{display:none!important}
   .split3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   details{border:1px solid var(--line);border-radius:8px;background:var(--code);padding:8px 10px}
@@ -72,10 +71,6 @@
 <header>
   <h1>KUE-CHIP2 Web Emulator / Assembler / Disassembler</h1>
   <div class="sub">8-bit CPU / 512-byte memory / ACC・IX・PC・CF・VF・NF・ZF / program: 000h-0FFh, data: 100h-1FFh</div>
-  <div class="tabs machine-tabs" role="tablist" aria-label="KUE-CHIP2 selector">
-    <button class="machine-tab" data-machine="0" aria-selected="true">KUE 1</button>
-    <button class="machine-tab" data-machine="1" aria-selected="false">KUE 2</button>
-  </div>
 </header>
 <main>
   <div class="grid">
@@ -684,47 +679,13 @@
     return lines.join('\n');
   }
 
-  const cpus = [new KueChip2(), new KueChip2()];
-  let activeMachine = 0;
-  let cpu = cpus[activeMachine];
+  const cpu = new KueChip2();
   let runTimer = null;
-  const lastAssemblies = [null, null];
+  let lastAssembly = null;
 
   const sample = `; KUE-CHIP2 sample: ACCを左回転して出力し続ける\n        LD  ACC, 01h\nLOOP:   OUT\n        RLL ACC\n        BA  LOOP\n        END\n`;
-  const machineText = [0, 1].map(() => ({
-    asmSource: sample, hexInput: '00: 62 01 10 47 30 02', asmResult: '', disasmOutput: '', inputQueue: ''
-  }));
   $('asmSource').value = sample;
   $('hexInput').value = '00: 62 01 10 47 30 02';
-
-  function saveMachineText() {
-    const state = machineText[activeMachine];
-    state.asmSource = $('asmSource').value;
-    state.hexInput = $('hexInput').value;
-    state.asmResult = $('asmResult').textContent;
-    state.disasmOutput = $('disasmOutput').textContent;
-    state.inputQueue = $('inputQueue').value;
-  }
-  function restoreMachineText() {
-    const state = machineText[activeMachine];
-    $('asmSource').value = state.asmSource;
-    $('hexInput').value = state.hexInput;
-    $('asmResult').textContent = state.asmResult;
-    $('disasmOutput').textContent = state.disasmOutput;
-    $('inputQueue').value = state.inputQueue;
-  }
-  function switchMachine(index) {
-    if (index === activeMachine) return;
-    stopRun();
-    saveMachineText();
-    activeMachine = index;
-    cpu = cpus[activeMachine];
-    restoreMachineText();
-    for (const btn of document.querySelectorAll('.machine-tab')) {
-      btn.setAttribute('aria-selected', String(Number(btn.dataset.machine) === activeMachine));
-    }
-    updateUI();
-  }
 
   function updateUI() {
     $('regPC').value = HEX(cpu.pc); $('regACC').value = HEX(cpu.acc); $('regIX').value = HEX(cpu.ix);
@@ -777,14 +738,14 @@
 
   $('assembleLoad').onclick = () => {
     try {
-      const result = assemble($('asmSource').value); lastAssemblies[activeMachine] = result; cpu.loadImage(result.image, true);
+      const result = assemble($('asmSource').value); lastAssembly = result; cpu.loadImage(result.image, true);
       $('asmResult').textContent = formatAssemblyResult(result);
       $('disasmOutput').textContent = disassemble(cpu.mem, 0, Math.min(255, Math.max(0, result.highest)), true);
       updateUI();
     } catch (e) { $('asmResult').textContent = `ERROR: ${e.message}`; }
   };
   $('assembleOnly').onclick = () => {
-    try { const result = assemble($('asmSource').value); lastAssemblies[activeMachine] = result; $('asmResult').textContent = formatAssemblyResult(result); }
+    try { const result = assemble($('asmSource').value); lastAssembly = result; $('asmResult').textContent = formatAssemblyResult(result); }
     catch (e) { $('asmResult').textContent = `ERROR: ${e.message}`; }
   };
   function formatAssemblyResult(result) {
@@ -796,7 +757,7 @@
   $('loadSample').onclick = () => { $('asmSource').value = sample; };
   $('clearSource').onclick = () => { $('asmSource').value = ''; $('asmResult').textContent = ''; };
   $('loadHex').onclick = () => { try { cpu.loadImage(parseHexText($('hexInput').value), true); $('disasmOutput').textContent = disassemble(cpu.mem, 0, 255, true); updateUI(); } catch(e){ $('disasmOutput').textContent = `ERROR: ${e.message}`; } };
-  $('disasmProg').onclick = () => { const lastAssembly = lastAssemblies[activeMachine]; const end = lastAssembly ? Math.min(255, lastAssembly.highest) : 255; $('disasmOutput').textContent = disassemble(cpu.mem, 0, end, true); };
+  $('disasmProg').onclick = () => { const end = lastAssembly ? Math.min(255, lastAssembly.highest) : 255; $('disasmOutput').textContent = disassemble(cpu.mem, 0, end, true); };
   $('disasmAll').onclick = () => { $('disasmOutput').textContent = disassemble(cpu.mem, 0, 255, false); };
   $('resetCpu').onclick = () => { stopRun(); cpu.resetCpu(); updateUI(); };
   $('stepOne').onclick = () => { cpu.step(); updateUI(); };
@@ -831,9 +792,6 @@
     const n = parseNumberToken(v.trim() + (/h$/i.test(v.trim()) || /^0x/i.test(v.trim()) ? '' : 'h'));
     if (n !== null) { cpu.mem[addr] = U8(n); updateUI(); }
   });
-  for (const btn of document.querySelectorAll('.machine-tab')) {
-    btn.addEventListener('click', () => switchMachine(Number(btn.dataset.machine)));
-  }
   for (const btn of document.querySelectorAll('.tabbtn')) {
     btn.addEventListener('click', () => {
       for (const b of document.querySelectorAll('.tabbtn')) b.setAttribute('aria-selected', String(b === btn));
